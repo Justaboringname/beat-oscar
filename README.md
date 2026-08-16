@@ -55,6 +55,17 @@ confirmed against the server before continuing, so there is no half-applied stat
 | `--api` | PATCH the server directly (faster, but the board won't move — see below) |
 | `--retries 3` | Retries for a move that doesn't land |
 | `--engine PATH` | Path to Stockfish (auto-detected; also reads `$STOCKFISH_PATH`) |
+| `--threads N` | Engine threads (default: number of performance cores) |
+| `--hash MB` | Transposition table size (default 2048) |
+
+On Apple Silicon the thread default counts **performance cores only**
+(`hw.perflevel0.physicalcpu`) — including the efficiency cores drags the search down.
+
+A note on threads: on an M1 Pro, going 1 → 8 threads multiplied throughput by ~9.5x
+(390k → 3.7M nps) but the *nominal* depth reached in a fixed 3s went **down** by one ply.
+That's normal Lazy SMP behaviour — the extra cores widen the search rather than deepen it.
+With `--depth` you just reach the same depth sooner; only `--movetime` converts the extra
+throughput into playing strength. Against Oscar none of this is observable.
 
 ## How it works
 

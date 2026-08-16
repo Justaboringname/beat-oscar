@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 import time
 
@@ -38,6 +39,23 @@ _STOCKFISH_CANDIDATES = (
     "/usr/local/bin/stockfish",         # Intel Homebrew
     "/opt/local/bin/stockfish",         # MacPorts
 )
+
+
+def default_threads() -> int:
+    """默认用性能核的数量。
+
+    在 Apple Silicon 上别把能效核也算进去 —— 它们比性能核慢得多，
+    搜索是同步的，慢核会拖住整体。拿不到就退回 os.cpu_count()-2。
+    """
+    try:
+        out = subprocess.run(["sysctl", "-n", "hw.perflevel0.physicalcpu"],
+                             capture_output=True, text=True, timeout=3)
+        n = int(out.stdout.strip())
+        if n > 0:
+            return n
+    except Exception:
+        pass
+    return max(1, (os.cpu_count() or 2) - 2)
 
 
 def find_stockfish(explicit: str | None = None) -> str:
@@ -92,6 +110,10 @@ def main() -> int:
     ap.add_argument("--api", action="store_true", help="直接 PATCH 服务端(棋盘不会动)")
     ap.add_argument("--retries", type=int, default=3, help="单步落子失败的重试次数")
     ap.add_argument("--engine", default=None, help="Stockfish 可执行文件路径(默认自动查找)")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="引擎线程数(默认=性能核数)")
+    ap.add_argument("--hash", type=int, default=2048,
+                    help="置换表 MB(默认 2048)")
     args = ap.parse_args()
 
     try:
@@ -113,6 +135,12 @@ def main() -> int:
         print(f"✗ {exc}")
         return 2
     engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+    threads = args.threads if args.threads else default_threads()
+    try:
+        engine.configure({"Threads": threads, "Hash": args.hash})
+        print(f"  引擎: Stockfish @ {threads} 线程 / {args.hash}MB 置换表")
+    except chess.engine.EngineError as exc:
+        print(f"  ⚠ 引擎参数设置失败，回落到默认值: {exc}")
     limit = (chess.engine.Limit(time=args.movetime) if args.movetime
              else chess.engine.Limit(depth=args.depth))
 
