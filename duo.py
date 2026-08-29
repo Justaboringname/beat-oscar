@@ -171,15 +171,15 @@ def click_at(x: float, y: float) -> dict:
     return run_js(_CLICK, params={"x": x, "y": y})
 
 
-def play_move_by_click(uci: str, player_color: str, pause: float = 0.7) -> dict:
+def play_move_by_click(uci: str, player_color: str, pause: float = 0.5) -> dict:
     """用合成点击走一步：先点起点格，再点终点格。
 
     走的是页面自己的走子逻辑，所以 store / UI / 网络请求全都由页面负责，
     不会出现「服务端走了但页面不知道」的状态分裂。
 
-    ⚠️ `pause` 别调小。实测 0.25s 时选中动画还没播完，第二下点击会被整个吃掉 ——
-    表现为棋子停在选中态、走子不落。0.25s 下曾连走 19 步只错 1 步，是踩在边缘上；
-    0.7s 是把这个边缘让开，不是随便取的数。
+    ⚠️ `pause` 别再往下调。实测 0.25s 时选中动画还没播完，第二下点击会被整个吃掉 ——
+    表现为棋子停在选中态、走子不落（0.25s 下曾连走 19 步只错 1 步，踩在边缘上）。
+    0.7s 实测稳；0.5s 是用户要求的折中，靠 play_move_with_retry 兜底。
     """
     geo = board_geometry()
     src, dst = uci[0:2], uci[2:4]

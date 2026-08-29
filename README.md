@@ -48,7 +48,7 @@ confirmed against the server before continuing, so there is no half-applied stat
 
 | Flag | Meaning |
 |---|---|
-| `--depth 20` | Stockfish search depth (default 20) |
+| `--depth 10` | Stockfish search depth (default 10 — plenty against Oscar, ~0.03s/move) |
 | `--movetime 2.0` | Use seconds-per-move instead of depth |
 | `--once` | Play a single move |
 | `--dry-run` | Compute only, print the engine's suggestion |
@@ -61,11 +61,29 @@ confirmed against the server before continuing, so there is no half-applied stat
 On Apple Silicon the thread default counts **performance cores only**
 (`hw.perflevel0.physicalcpu`) — including the efficiency cores drags the search down.
 
-A note on threads: on an M1 Pro, going 1 → 8 threads multiplied throughput by ~9.5x
-(390k → 3.7M nps) but the *nominal* depth reached in a fixed 3s went **down** by one ply.
-That's normal Lazy SMP behaviour — the extra cores widen the search rather than deepen it.
-With `--depth` you just reach the same depth sooner; only `--movetime` converts the extra
-throughput into playing strength. Against Oscar none of this is observable.
+### Depth and threads, measured
+
+`--depth` is what costs CPU, and it grows exponentially. On an M1 Pro:
+
+| config | nodes/move | time/move |
+|---|---|---|
+| depth 10, 1 thread | 5,184 | 0.013s |
+| depth 10, 8 threads | 45,538 | 0.030s |
+| depth 20, 1 thread | 943,654 | 1.85s |
+| depth 20, 8 threads | 13,610,842 | 3.06s |
+
+Stockfish's multithreading is **Lazy SMP**: threads all search the *same* tree and only
+communicate through the shared transposition table, so 8 threads do ~9x the *work*, not
+1/8th each. That extra work is not wasted, though — a head-to-head at fixed depth 10
+(16 games, 8 openings, colours reversed) gave **8 threads 5 wins / 11 draws / 0 losses,
+≈ +112 Elo**. Nominal depth being equal does *not* mean equal search quality: the extra
+nodes make pruning less aggressive and key lines better verified.
+
+(An earlier version of this README claimed `--depth` made threads pointless. That was
+wrong, and the match above is what disproved it.)
+
+None of this matters against Oscar: even 1 thread at depth 10 beats a UCI_Elo-1320
+opponent 4–0, and Oscar adapts to the player's rating, which is far below that.
 
 ## How it works
 
@@ -141,8 +159,9 @@ Every item below is a measured result, not a guess:
    real cause of failed moves. The symptom is a piece stuck in the selected state (enlarged,
    legal targets dotted) that simply won't move. It looks like "canvas rejects synthetic
    events", but **real mouse events (`cliclick`) fail identically** — it's the selection
-   animation eating the second click. Raising `pause` from 0.25s to **0.7s** fixed it;
-   at 0.25s one game ran 19 moves with a single failure, i.e. right on the edge.
+   animation eating the second click. 0.25s fails (one game ran 19 moves with a single
+   failure — right on the edge), 0.7s is verified stable; the default is now **0.5s**,
+   a deliberate compromise that leans on the retry below.
    Retry (`clear_selection()` + re-click) is kept as a backstop and **has been observed
    working** — one game still needed 3 attempts on move 3.
 

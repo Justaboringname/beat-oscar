@@ -102,7 +102,8 @@ def wait_ready(timeout: float = 25.0, poll: float = 1.0):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--depth", type=int, default=20, help="Stockfish 搜索深度")
+    ap.add_argument("--depth", type=int, default=10,
+                    help="Stockfish 搜索深度(默认 10，足以碾压奥斯卡且几乎不耗 CPU)")
     ap.add_argument("--movetime", type=float, default=None, help="每步秒数(给了则优先于 depth)")
     ap.add_argument("--delay", type=float, default=0.8, help="每步之间的间隔秒数")
     ap.add_argument("--once", action="store_true", help="只走一步")
