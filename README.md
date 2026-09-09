@@ -4,10 +4,11 @@
 
 Let Stockfish play chess against **Oscar**, Duolingo's in-app chess bot, in Safari.
 
-It reads the position from Duolingo's own API and plays moves by synthesizing mouse
-events on the board — **no screenshots, no image recognition, no board calibration**.
+It reads the position from Duolingo's own API and plays moves by calling the page's own
+move entry point — **no screenshots, no image recognition, no board calibration, no
+synthetic clicks**.
 
-_Last updated: 2026-08-15 · macOS + Safari only_
+_Last updated: 2026-09-09 · macOS + Safari only_
 
 ## Disclaimer
 
@@ -52,7 +53,8 @@ confirmed against the server before continuing, so there is no half-applied stat
 | `--movetime 2.0` | Use seconds-per-move instead of depth |
 | `--once` | Play a single move |
 | `--dry-run` | Compute only, print the engine's suggestion |
-| `--api` | PATCH the server directly (faster, but the board won't move — see below) |
+| `--api` | PATCH the server directly (board won't move; **untested since 2026-09-09**) |
+| `--click` | Fall back to synthetic clicks (**verified broken 2026-09-09**, see below) |
 | `--retries 3` | Retries for a move that doesn't land |
 | `--engine PATH` | Path to Stockfish (auto-detected; also reads `$STOCKFISH_PATH`) |
 | `--threads N` | Engine threads (default: number of performance cores) |
@@ -90,21 +92,53 @@ opponent 4–0, and Oscar adapts to the player's rating, which is far below that
 ```
 read position  →  GET /chess/1/<uid>/matches/<matchId>     authoritative FEN
 pick move      →  local Stockfish
-play move      →  synthesized pointer/mouse events on the board
+play move      →  the page's own selectPosition + makeMoveOnRiveBoard
 ```
 
 Three modules:
 
 - `bridge.py` — the Safari bridge: `osascript` + `do JavaScript`, running synchronous
   JS in the page context
-- `duo.py` — protocol layer: read state, square→pixel mapping, synthetic clicks, retries
+- `duo.py` — protocol layer: read state, native move entry, square→pixel mapping,
+  synthetic clicks (dead fallback), retries
 - `bot.py` — the main loop
 
-**Why click the board instead of just calling the API?** Calling it directly works
-(`--api` does exactly that), but the page's React store never learns about it, so the
-board **freezes on the old position** — and any move you then make by hand is sent with
-a stale position and fights the server. Clicking makes the page play the move through
-its own logic, so store, UI and network requests all stay consistent.
+**Why not just call the API?** Calling it directly works (`--api` does exactly that), but
+the page's React store never learns about it, so the board **freezes on the old position** —
+and any move you then make by hand is sent with a stale position and fights the server. The
+move has to go through the page's *own* logic so store, UI and network requests stay
+consistent.
+
+**How the page is driven (the default path since 2026-09-09).** The board is rendered with
+Rive; none of the 64 squares are DOM elements. A real tap ends up in the controller's
+`onRiveEventReceived`, which reads row/col off the Rive event, matches it against
+`validMovesForSelectedPosition`, and calls `makeMoveOnRiveBoard`. We join at that step:
+
+```
+eng.selectPosition(pos)          # pos comes from the engine's own pieceToPosition —
+                                 # a hand-built object won't match by reference
+mv = the entry in validMovesForSelectedPosition whose `to` matches
+ctrl.makeMoveOnRiveBoard(mv)     # engine move + board animation + the page's own request
+```
+
+The controller lives in a `useRef` (found by looking for a `makeMoveOnRiveBoard` method);
+the engine is its `b19_1` (the `new Ec(t)` from `initializeGame`). Coordinates are
+**row 0 = rank 1, col 0 = the a-file**, verified against a knight on f3. This skips hit
+testing, selection animation and click timing entirely, and loses nothing downstream.
+
+## What changed on 2026-09-09
+
+Duolingo moved the board to a **Rive canvas** and added the 「实战练习 / 20:00 / points」
+shell. Two consequences:
+
+1. The old board-geometry heuristic (`div` + `width>400` + near-square) can never match —
+   the canvas's only container is 748×935 (the extra height is headroom for Oscar's
+   character animation to overflow). Worse, the failure surfaced as "the page probably
+   isn't in a game", disguising a layout change as a page-state problem. It now takes the
+   largest canvas's **parent** rect, and reports the observed canvas/parent sizes on
+   mismatch.
+2. Synthetic clicks stopped working entirely (see #5 below), so moves now go through the
+   page's own entry point.
 
 ## The protocol
 
@@ -152,10 +186,15 @@ Every item below is a measured result, not a guess:
    contain *other people's* ids (`friendButtonAvatarUserId`). I grabbed a friend's id once
    before catching it.
 
-5. **Safari's canvas accepts synthetic events** (the iOS app's did not). That kills the
-   entire OS-level approach — no `cliclick`, no screen capture, no geometry calibration.
+5. ~~**Safari's canvas accepts synthetic events** (the iOS app's did not).~~
+   **Overturned 2026-09-09**: the Rive board now ignores synthetic events entirely. Ruled
+   out: the hit target really is the canvas (`elementFromPoint` returns it), its
+   `pointer-events` is `auto`, and splitting down/up across frames changes nothing — not
+   even selection fires (`selectedPosition` stays null). **The actual reason is unknown**;
+   I stopped digging because the native path makes this moot. `--click` is kept for history
+   and does not work.
 
-6. **You must pause between clicking the origin and the destination square.** This was the
+6. **(Historical)** **You must pause between clicking the origin and the destination square.** This was the
    real cause of failed moves. The symptom is a piece stuck in the selected state (enlarged,
    legal targets dotted) that simply won't move. It looks like "canvas rejects synthetic
    events", but **real mouse events (`cliclick`) fail identically** — it's the selection
@@ -178,9 +217,18 @@ Every item below is a measured result, not a guess:
 
 - **Pawn promotion is untested.** The bot prints a warning and stops rather than clicking
   blindly. Play that move by hand and re-run.
+- **Castling works on the native path** — verified 2026-09-09, `O-O` (`e8g8`) played in a
+  21-ply game that ended in mate. En passant is still unobserved. Promotion is refused
+  outright: several legal moves share the destination square, and matching is by
+  destination only.
 - **Don't reload the page mid-game** (see #7).
-- Square coordinates assume the board is the only large square container on the page; a
-  Duolingo redesign may require re-locating it.
+- The native path depends on Duolingo's minified internals (`makeMoveOnRiveBoard`,
+  `b19_1`, the row/col convention). A redesign can break it.
+- **`--api` has not been re-tested since the 2026-09-09 redesign.** Reading state (GET) is
+  verified; the move `PATCH` is not. It is the natural fallback if the native path breaks,
+  but treat it as unverified until you land one move with it.
+- Board geometry (only used by the dead `--click` path) now takes the largest canvas's
+  **parent** rect — the canvas itself is 748×935, not square.
 - `--api` desyncs the board on purpose — only use it when you're not watching.
 - Verified in Duolingo's *practice* mode (「实战练习」). Rated matches likely use the same
   protocol but that has not been tested.

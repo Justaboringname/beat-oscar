@@ -3,7 +3,7 @@
 
   读局面 —— 向服务端 GET 权威 FEN
   算招   —— 本地 Stockfish
-  落子   —— 合成鼠标事件点棋盘，让页面用它自己的逻辑走子
+  落子   —— 直接调页面自己的落子入口(selectPosition + makeMoveOnRiveBoard)
 
 落子走页面自己的逻辑，所以 store / UI / 网络请求都归页面管，棋盘会实时动，
 不会出现「服务端走了但页面停在旧局面」的状态分裂。
@@ -12,6 +12,7 @@
     python3 bot.py                 # 自动下完整局
     python3 bot.py --once          # 只走一步
     python3 bot.py --dry-run       # 只算不走
+    python3 bot.py --click         # 退回老的合成点击(要靠棋盘几何，脆)
     python3 bot.py --api           # 直接 PATCH 服务端(快，但棋盘不会动)
 
 已知限制：
@@ -109,6 +110,8 @@ def main() -> int:
     ap.add_argument("--once", action="store_true", help="只走一步")
     ap.add_argument("--dry-run", action="store_true", help="只算不走")
     ap.add_argument("--api", action="store_true", help="直接 PATCH 服务端(棋盘不会动)")
+    ap.add_argument("--click", action="store_true",
+                    help="退回合成点击落子(默认走页面自己的落子入口，不需要棋盘几何)")
     ap.add_argument("--retries", type=int, default=3, help="单步落子失败的重试次数")
     ap.add_argument("--engine", default=None, help="Stockfish 可执行文件路径(默认自动查找)")
     ap.add_argument("--threads", type=int, default=None,
@@ -125,9 +128,12 @@ def main() -> int:
 
     match_id = st["id"]
     color = st.get("color") or "white"
+    if args.click:
+        print("⚠ --click：合成点击在 2026-09-09 的 Rive 棋盘上实测已失效（连选中都不触发）。"
+              "\n  不依赖页面内部结构的退路是 --api（自改版后未重测）。")
     print(f"✓ 对局 {match_id}")
     print(f"  执子: {'白' if color == 'white' else '黑'} | uid {uid} | "
-          f"模式: {'API 直连' if args.api else '合成点击'}")
+          f"模式: {'API 直连' if args.api else ('合成点击' if args.click else '原生落子')}")
     print(f"  当前: {len(st['hist'])} 步  {st['fen']}")
 
     try:
@@ -186,7 +192,8 @@ def main() -> int:
                       "outcome": m.get("outcome"), "endCondition": m.get("endCondition")}
             else:
                 st, tries = duo.play_move_with_retry(
-                    best.uci(), color, uid, match_id, before, retries=args.retries)
+                    best.uci(), color, uid, match_id, before, retries=args.retries,
+                    mode="click" if args.click else "native", fen=fen)
                 if tries > 1:
                     print(f"    (重试 {tries} 次才落下)")
 
