@@ -1,23 +1,38 @@
-# beat-oscar
+<div align="center">
 
-*[中文说明](README.zh.md)*
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
+  <img src="assets/hero-light.svg" width="100%" alt="beat-oscar, a Safari chess bot for macOS. Stockfish plays Oscar in Safari. It reads the position from the server API and plays through the page's own move entry: no screenshots, no synthetic clicks.">
+</picture>
+
+<br>
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-788c5d?style=flat-square)](LICENSE)
+![Python 3](https://img.shields.io/badge/python-3-788c5d?style=flat-square)
+![macOS + Safari only](https://img.shields.io/badge/platform-macOS%20%2B%20Safari-788c5d?style=flat-square)
+![Engine: Stockfish](https://img.shields.io/badge/engine-Stockfish-d97757?style=flat-square)
+
+**English** · [简体中文](README.zh.md)
+
+</div>
 
 Let Stockfish play chess against **Oscar**, Duolingo's in-app chess bot, in Safari.
 
 It reads the position from Duolingo's own API and plays moves by calling the page's own
-move entry point — **no screenshots, no image recognition, no board calibration, no
+move entry point: **no screenshots, no image recognition, no board calibration, no
 synthetic clicks**.
 
-_Last updated: 2026-09-09 · macOS + Safari only_
+Last updated: 2026-09-09 · macOS + Safari only
 
 ## Disclaimer
 
-- The opponent **is Duolingo's built-in AI bot** (Oscar), not a human. This does not
+- **The opponent is Duolingo's built-in AI bot** (Oscar), not a human. This does not
   affect anyone else's games or ratings.
-- It uses **undocumented internal endpoints**. Duolingo can break it at any time.
-- Automating the client most likely **violates Duolingo's Terms of Service**. Use at
-  your own risk — the author is not responsible for anything that happens to your account.
-- Published as a study of two things: reverse-engineering a web app's private API, and
+- **It uses undocumented internal endpoints.** Duolingo can break it at any time.
+- **Terms of Service.** Automating the client most likely violates Duolingo's Terms of
+  Service. Use at your own risk: the author is not responsible for anything that happens
+  to your account.
+- **Published as a study** of two things: reverse-engineering a web app's private API, and
   driving Safari from Python without a WebDriver.
 
 ## Install
@@ -34,7 +49,7 @@ Then enable two things in Safari:
 1. **Settings → Advanced → Show features for web developers** (reveals the Develop menu)
 2. **Develop → Allow JavaScript from Apple Events**
 
-On first run macOS will ask *"Terminal wants to control Safari"* — allow it (once).
+On first run macOS asks *"Terminal wants to control Safari"*. Allow it (once).
 
 ## Usage
 
@@ -44,12 +59,12 @@ Open a game against Oscar in Safari, then:
 python3 bot.py
 ```
 
-It takes over until the game ends. `Ctrl-C` is safe at any point — every move is
+It takes over until the game ends. `Ctrl-C` is safe at any point: every move is
 confirmed against the server before continuing, so there is no half-applied state.
 
 | Flag | Meaning |
-|---|---|
-| `--depth 10` | Stockfish search depth (default 10 — plenty against Oscar, ~0.03s/move) |
+|:--|:--|
+| `--depth 10` | Stockfish search depth (default 10: plenty against Oscar, ~0.03s/move) |
 | `--movetime 2.0` | Use seconds-per-move instead of depth |
 | `--once` | Play a single move |
 | `--dry-run` | Compute only, print the engine's suggestion |
@@ -61,22 +76,32 @@ confirmed against the server before continuing, so there is no half-applied stat
 | `--hash MB` | Transposition table size (default 2048) |
 
 On Apple Silicon the thread default counts **performance cores only**
-(`hw.perflevel0.physicalcpu`) — including the efficiency cores drags the search down.
+(`hw.perflevel0.physicalcpu`). Including the efficiency cores drags the search down.
 
 ### Depth and threads, measured
 
 `--depth` is what costs CPU, and it grows exponentially. On an M1 Pro:
 
-| config | nodes/move | time/move |
-|---|---|---|
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/depth-dark.svg">
+  <img src="assets/depth-light.svg" width="100%" alt="Bar chart of time per move on an M1 Pro. Depth 10 takes 0.013 s with 1 thread and 0.030 s with 8 threads, too short to see. Depth 20 takes 1.85 s with 1 thread and 3.06 s with 8 threads.">
+</picture>
+
+<details>
+<summary>Exact numbers</summary>
+
+| Config | Nodes/move | Time/move |
+|:--|--:|--:|
 | depth 10, 1 thread | 5,184 | 0.013s |
 | depth 10, 8 threads | 45,538 | 0.030s |
 | depth 20, 1 thread | 943,654 | 1.85s |
 | depth 20, 8 threads | 13,610,842 | 3.06s |
 
+</details>
+
 Stockfish's multithreading is **Lazy SMP**: threads all search the *same* tree and only
 communicate through the shared transposition table, so 8 threads do ~9x the *work*, not
-1/8th each. That extra work is not wasted, though — a head-to-head at fixed depth 10
+1/8th each. That extra work is not wasted, though. A head-to-head at fixed depth 10
 (16 games, 8 openings, colours reversed) gave **8 threads 5 wins / 11 draws / 0 losses,
 ≈ +112 Elo**. Nominal depth being equal does *not* mean equal search quality: the extra
 nodes make pruning less aggressive and key lines better verified.
@@ -95,24 +120,25 @@ pick move      →  local Stockfish
 play move      →  the page's own selectPosition + makeMoveOnRiveBoard
 ```
 
-Three modules:
+| Module | Role |
+|:--|:--|
+| `bridge.py` | The Safari bridge: `osascript` + `do JavaScript`, running synchronous JS in the page context |
+| `duo.py` | Protocol layer: read state, native move entry, square→pixel mapping, synthetic clicks (dead fallback), retries |
+| `bot.py` | The main loop |
 
-- `bridge.py` — the Safari bridge: `osascript` + `do JavaScript`, running synchronous
-  JS in the page context
-- `duo.py` — protocol layer: read state, native move entry, square→pixel mapping,
-  synthetic clicks (dead fallback), retries
-- `bot.py` — the main loop
+### Why not just call the API?
 
-**Why not just call the API?** Calling it directly works (`--api` does exactly that), but
-the page's React store never learns about it, so the board **freezes on the old position** —
-and any move you then make by hand is sent with a stale position and fights the server. The
-move has to go through the page's *own* logic so store, UI and network requests stay
-consistent.
+Calling it directly works (`--api` does exactly that), but the page's React store never
+learns about it, so the board **freezes on the old position**. Any move you then make by
+hand is sent with a stale position and fights the server. The move has to go through the
+page's *own* logic so store, UI and network requests stay consistent.
 
-**How the page is driven (the default path since 2026-09-09).** The board is rendered with
-Rive; none of the 64 squares are DOM elements. A real tap ends up in the controller's
-`onRiveEventReceived`, which reads row/col off the Rive event, matches it against
-`validMovesForSelectedPosition`, and calls `makeMoveOnRiveBoard`. We join at that step:
+### How the page is driven
+
+This is the default path since 2026-09-09. The board is rendered with Rive; none of the 64
+squares are DOM elements. A real tap ends up in the controller's `onRiveEventReceived`,
+which reads row/col off the Rive event, matches it against `validMovesForSelectedPosition`,
+and calls `makeMoveOnRiveBoard`. We join at that step:
 
 ```
 eng.selectPosition(pos)          # pos comes from the engine's own pieceToPosition —
@@ -131,14 +157,14 @@ testing, selection animation and click timing entirely, and loses nothing downst
 Duolingo moved the board to a **Rive canvas** and added the 「实战练习 / 20:00 / points」
 shell. Two consequences:
 
-1. The old board-geometry heuristic (`div` + `width>400` + near-square) can never match —
-   the canvas's only container is 748×935 (the extra height is headroom for Oscar's
-   character animation to overflow). Worse, the failure surfaced as "the page probably
-   isn't in a game", disguising a layout change as a page-state problem. It now takes the
-   largest canvas's **parent** rect, and reports the observed canvas/parent sizes on
-   mismatch.
-2. Synthetic clicks stopped working entirely (see #5 below), so moves now go through the
-   page's own entry point.
+1. **The old board-geometry heuristic can never match.** It looked for a `div` +
+   `width>400` + near-square, but the canvas's only container is 748×935 (the extra height
+   is headroom for Oscar's character animation to overflow). Worse, the failure surfaced as
+   "the page probably isn't in a game", disguising a layout change as a page-state problem.
+   It now takes the largest canvas's **parent** rect, and reports the observed
+   canvas/parent sizes on mismatch.
+2. **Synthetic clicks stopped working entirely** (see #5 below), so moves now go through
+   the page's own entry point.
 
 ## The protocol
 
@@ -160,18 +186,18 @@ no WebSocket, no polling.
 
 Terminal values, observed on a real checkmate: `status="completed"`, `outcome="black"`,
 `endCondition="checkmate"`. The code stops on `status != "active"` rather than matching
-those strings — resignation/timeout/draw values have never been observed.
+those strings. Resignation/timeout/draw values have never been observed.
 
 ## Things that cost me time
 
 Every item below is a measured result, not a guess:
 
 1. **Moves are `PATCH`, not `POST`.** Assuming POST because there's a body gets you a 405.
-   The server's `Allow: HEAD, OPTIONS, PATCH, GET` answers it directly — ask the server
+   The server's `Allow: HEAD, OPTIONS, PATCH, GET` answers it directly: ask the server
    before guessing.
 
-2. **`fen` and `moveHistory` are server-authored tokens — echo them back verbatim.**
-   Don't regenerate them with python-chess: one differing character in castling rights or
+2. **`fen` and `moveHistory` are server-authored tokens: echo them back verbatim.**
+   Don't regenerate them with python-chess. One differing character in castling rights or
    the halfmove clock desyncs the game silently.
 
 3. **You cannot read the live position from the React fiber.**
@@ -189,20 +215,20 @@ Every item below is a measured result, not a guess:
 5. ~~**Safari's canvas accepts synthetic events** (the iOS app's did not).~~
    **Overturned 2026-09-09**: the Rive board now ignores synthetic events entirely. Ruled
    out: the hit target really is the canvas (`elementFromPoint` returns it), its
-   `pointer-events` is `auto`, and splitting down/up across frames changes nothing — not
+   `pointer-events` is `auto`, and splitting down/up across frames changes nothing; not
    even selection fires (`selectedPosition` stays null). **The actual reason is unknown**;
    I stopped digging because the native path makes this moot. `--click` is kept for history
    and does not work.
 
-6. **(Historical)** **You must pause between clicking the origin and the destination square.** This was the
-   real cause of failed moves. The symptom is a piece stuck in the selected state (enlarged,
-   legal targets dotted) that simply won't move. It looks like "canvas rejects synthetic
-   events", but **real mouse events (`cliclick`) fail identically** — it's the selection
-   animation eating the second click. 0.25s fails (one game ran 19 moves with a single
-   failure — right on the edge), 0.7s is verified stable; the default is now **0.5s**,
-   a deliberate compromise that leans on the retry below.
+6. **(Historical)** **You must pause between clicking the origin and the destination square.**
+   This was the real cause of failed moves. The symptom is a piece stuck in the selected
+   state (enlarged, legal targets dotted) that simply won't move. It looks like "canvas
+   rejects synthetic events", but **real mouse events (`cliclick`) fail identically**: it's
+   the selection animation eating the second click. 0.25s fails (one game ran 19 moves with
+   a single failure, right on the edge), 0.7s is verified stable; the default is now
+   **0.5s**, a deliberate compromise that leans on the retry below.
    Retry (`clear_selection()` + re-click) is kept as a backstop and **has been observed
-   working** — one game still needed 3 attempts on move 3.
+   working**: one game still needed 3 attempts on move 3.
 
 7. **Reloading mid-game loses the game.** The page installs a `beforeunload` guard, and
    after a reload it starts a *new* game rather than restoring the old one. The server
@@ -217,18 +243,22 @@ Every item below is a measured result, not a guess:
 
 - **Pawn promotion is untested.** The bot prints a warning and stops rather than clicking
   blindly. Play that move by hand and re-run.
-- **Castling works on the native path** — verified 2026-09-09, `O-O` (`e8g8`) played in a
+- **Castling works on the native path.** Verified 2026-09-09: `O-O` (`e8g8`) played in a
   21-ply game that ended in mate. En passant is still unobserved. Promotion is refused
   outright: several legal moves share the destination square, and matching is by
   destination only.
 - **Don't reload the page mid-game** (see #7).
-- The native path depends on Duolingo's minified internals (`makeMoveOnRiveBoard`,
+- **The native path depends on Duolingo's minified internals** (`makeMoveOnRiveBoard`,
   `b19_1`, the row/col convention). A redesign can break it.
 - **`--api` has not been re-tested since the 2026-09-09 redesign.** Reading state (GET) is
   verified; the move `PATCH` is not. It is the natural fallback if the native path breaks,
   but treat it as unverified until you land one move with it.
-- Board geometry (only used by the dead `--click` path) now takes the largest canvas's
-  **parent** rect — the canvas itself is 748×935, not square.
-- `--api` desyncs the board on purpose — only use it when you're not watching.
-- Verified in Duolingo's *practice* mode (「实战练习」). Rated matches likely use the same
-  protocol but that has not been tested.
+- **Board geometry** (only used by the dead `--click` path) now takes the largest canvas's
+  **parent** rect. The canvas itself is 748×935, not square.
+- **`--api` desyncs the board on purpose.** Only use it when you're not watching.
+- **Verified in Duolingo's *practice* mode** (「实战练习」). Rated matches likely use the
+  same protocol but that has not been tested.
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="396" viewBox="0 0 1280 396" role="img" aria-labelledby="t">
+<title id="t">Time per move on an M1 Pro. Depth 10: 0.013 s with 1 thread (5,184 nodes), 0.030 s with 8 threads (45,538 nodes). Depth 20: 1.85 s with 1 thread (943,654 nodes), 3.06 s with 8 threads (13,610,842 nodes).</title>
+<style>
+.sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tx { fill: #ecece8; }
+.mu { fill: #9b9a94; }
+.clay { fill: #d97757; }
+.sage { fill: #9bb07c; }
+.eyebrow { font-size: 22px; letter-spacing: 4px; }
+.title { font-weight: 700; letter-spacing: -1.5px; }
+.tag { font-size: 28px; }
+.node { font-size: 24px; font-weight: 600; }
+.sub { font-size: 22px; }
+.cap { font-size: 22px; }
+.small { font-size: 20px; }
+.num { font-variant-numeric: tabular-nums; }
+.hdr { font-size: 20px; }
+.row { font-size: 24px; }
+.val { font-size: 22px; }
+</style>
+<rect x="0.5" y="0.5" width="1279" height="395" rx="20" fill="#181818" stroke="#2f2f2f" stroke-width="1"/>
+<text class="sans hdr mu" x="56" y="78">config</text>
+<text class="sans hdr mu" x="532" y="78" text-anchor="end">nodes / move</text>
+<text class="sans hdr mu" x="572" y="78">time / move, M1 Pro</text>
+<line x1="56" y1="98.5" x2="1224" y2="98.5" stroke="#2f2f2f" stroke-width="1"/>
+<text class="sans row tx" x="56" y="154">depth 10 · 1 thread</text>
+<text class="mono val mu num" x="532" y="154" text-anchor="end">5,184</text>
+<rect x="572" y="133.0" width="4.0" height="26" rx="4" fill="#9bb07c"/>
+<text class="mono val tx num" x="592.0" y="154">0.013s</text>
+<text class="sans row tx" x="56" y="212">depth 10 · 8 threads</text>
+<text class="mono val mu num" x="532" y="212" text-anchor="end">45,538</text>
+<rect x="572" y="191.0" width="5.2" height="26" rx="4" fill="#9bb07c"/>
+<text class="mono val tx num" x="593.2" y="212">0.030s</text>
+<text class="sans row tx" x="56" y="286">depth 20 · 1 thread</text>
+<text class="mono val mu num" x="532" y="286" text-anchor="end">943,654</text>
+<rect x="572" y="265.0" width="323.8" height="26" rx="4" fill="#d97757"/>
+<text class="mono val tx num" x="911.8" y="286">1.85s</text>
+<text class="sans row tx" x="56" y="344">depth 20 · 8 threads</text>
+<text class="mono val mu num" x="532" y="344" text-anchor="end">13,610,842</text>
+<rect x="572" y="323.0" width="535.5" height="26" rx="4" fill="#d97757"/>
+<text class="mono val tx num" x="1123.5" y="344">3.06s</text>
+<line x1="56" y1="241.5" x2="1224" y2="241.5" stroke="#2a2a2a" stroke-width="1"/>
+</svg>
